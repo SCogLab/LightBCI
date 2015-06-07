@@ -5,7 +5,7 @@ import sys, os, platform
 from serial import *
 
 class MyOVBox(OVBox):
-  
+    
     def __init__(self):
         OVBox.__init__(self)
         sys_plaform = platform.system()
@@ -16,7 +16,7 @@ class MyOVBox(OVBox):
         self.new_chunk = 0
         self.quantiles = []
         self.serial_port="COM17"
-      
+        
     def initialize(self):
         self.win_len   = int(self.setting['window_len'])
         self.eeg_data  = np.zeros([self.win_len])
@@ -25,17 +25,19 @@ class MyOVBox(OVBox):
         print 'create %i length window' %self.win_len
         #self.boug = bougie.Bougie()
         self.hand = 1.
-        self.port_serie = Serial(port=self.serial_port, baudrate=9600, timeout=1, writeTimeout=1)
-        print "connected to " + self.serial_port
+        self.port_serie = Serial(port=self.serial_port, 
+                                 baudrate=9600, 
+                                 timeout=1, 
+                                 writeTimeout=1)
     
     def process(self):
         for chunkIndex in range(len(self.input[0])):
             if(type(self.input[0][chunkIndex]) == OVStreamedMatrixHeader):
-                print "header received"
                 hdr = self.input[0].pop()
+           
             elif(type(self.input[0][chunkIndex]) == OVStreamedMatrixBuffer):
-                
                 chunk  = np.log10(np.reshape(np.array(self.input[0].pop()),(1,-1)))
+             
                 if (self.getCurrentTime() > 15) & (self.new_chunk < self.win_len):
                     self.eeg_data[self.new_chunk] = chunk.mean()
                     print 'getting chunk %i at time %.2f : %f' %(self.new_chunk,self.getCurrentTime(),chunk.mean())
@@ -45,20 +47,22 @@ class MyOVBox(OVBox):
                     (self.quantiles) = stats.mstats.mquantiles(self.eeg_data,prob=np.arange(0,10,.1)/10.)
                     print '5 percent inter-quantiles : ' + str(self.quantiles)
                     self.new_chunk = self.new_chunk+1
+                
                 elif self.new_chunk > self.win_len:
-                    self.hand = sum(self.quantiles <= chunk.mean())
-                    self.port_serie.write([self.hand])
+                    self.hand = 100-sum(self.quantiles <= chunk.mean())
+                    #port_serie.write([self.hand])
                     print 'updated to %f' %self.hand
                 else:
                     print 'missing %i chunks' %(self.win_len-self.new_chunk)
+                
             elif(type(self.input[0][chunkIndex]) == OVStreamedMatrixEnd):
                 print 'End of buffer'
+        
         # empty the input list
         while len(self.input[0]):
-           self.input[0].pop()
-       
-    def uninitialize(self):
-        self.data = []
-        self.port_serie.close()
+            self.input[0].pop()
+   
+  def uninitialize(self):
+     self.data = []
 
 box = MyOVBox()
